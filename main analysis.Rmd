@@ -30,13 +30,15 @@ pal.theme <- theme(panel.grid.major = element_blank())+
   theme(strip.text.y = element_text(size = 12))+
   theme(strip.background.y = element_rect(fill = NA))
 
-grid.url <- "https://raw.githubusercontent.com/pguiden-pal/refuge-seed-removal/refs/heads/main/data/REFUGE%20grid%20data.csv"
+grid.url <- "https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/REFUGE%20grid%20data.csv"
+
 plantings <- read.csv(url(grid.url))
 
 # Define a list of invasives:
 invasives <- c('LOCO', 'LOMA', 'TRRE')
 
-seed.url <- "https://raw.githubusercontent.com/pguiden-pal/refuge-seed-removal/refs/heads/main/data/REFUGE%20seed%20removal%202.csv"
+seed.url <- "https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/REFUGE%20seed%20removal%202.csv"
+
 seed.data <- read.csv(url(seed.url)) %>% 
   filter(is.na(Number.of.seeds.intact) == FALSE) %>% 
   mutate(total.seeds = ifelse(Number.of.seeds.intact > 8, Number.of.seeds.intact, 8),
@@ -76,15 +78,19 @@ ggplot(seed.data, aes(x = prop.intact.seeds, fill = Treatment))+
 ## Model construction
 After inspecting the data, we can run some models. 
 
-Before modeling for real, I like to run an lmer() strictly to check the denominator DF's to make sure the model is accurately interpreting our experimental design (following the advice of Arnqvist 2020 TREE). For example, any management action should be replicated at the planting level, not the bucket level (so it should have ~18 DDFs instead of ~500 DDFs). After some tinkering, I ended up with a random intercept term nesting Treatment inside Planting (i.e., (1|Planting/Treatment)), which makes sense. I also add a random intercept for the unit of replication (i.e., species-planting-month combination, which matches the ID column; (1|ID)), which helps account for overdispersion in binomial/Poisson models. 
+Before modeling for real, I like to run an lmer() strictly to check the denominator DF's to make sure the model is accurately interpreting our experimental design (following the advice of Arnqvist 2020 TREE). For example, any management action should be replicated at the planting level, not the bucket level (so it should have ~18 DDFs instead of ~500 DDFs). After some tinkering, I ended up with a random intercept term nesting Bucket (new variable combining planting/month/treatment) inside Planting (i.e., (1|Planting/Treatment)), which makes sense. I also add a random intercept for the unit of replication (i.e., species-planting-month-treatment) combination, which matches the ID column; (1|ID)), which helps account for overdispersion in binomial/Poisson models. 
 
 It bears repeating but *we don't care about the coefficients or P-values here*; this exercise is simply done to eyeball the denominator degrees of freedom to increase our confidence about random effects structures.
 
 ```{r, include = TRUE}
-# Check with regular lmer: Treatment is nested within Planting!
+# Check with regular lmer: Bucket is nested within Planting!
+
+# Create a new variable for bucket
+seed.data$bucket <- paste(seed.data$Planting, ' ',  seed.data$Treatment, ' ', seed.data$Month)
+
 seed.model.check = lmer(data = seed.data,
-                   prop.intact.seeds~Treatment*invasive+Month+Bison*Burn.2024+
-                     (1|Planting/Treatment)+
+                   prop.intact.seeds~Treatment*invasive+invasive*Month+Bison*Burn.2024+
+                     (1|Planting/bucket)+
                      (1|Species))
 Anova(seed.model.check, test = 'F')
 ```
@@ -113,10 +119,10 @@ As far as structuring the model, we have some decisions to make. We have six key
 #                  rest.age*Bison+
 #               rest.age*Burn.2024+
 #                Bison*Burn.2024+
-    #                 # Probably need to add an ID row for overdispersion....
- #              (1|Planting/Treatment)+(1|Species)+(1|ID),
-  #                family = binomial,
-  #              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
+                   # Probably need to add an ID row for overdispersion....
+#              (1|Planting/bucket)+(1|Species)+(1|ID),
+#                family = binomial,
+#              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
 #check_model(big.model)
 #check_convergence(big.model)
 #check_collinearity(big.model)
@@ -137,13 +143,13 @@ small.model <- glmer(data = seed.data,
                      cbind(removed.seeds, intact.seeds)~
                        Bison+Burn.2024+Month+invasive+Treatment+
                        #Should we include this in the model if it didn't pop? Probs...
-                       rest.age+
+                       scale(rest.age)+
                        Bison*Burn.2024+
                        Bison*Treatment+
                        Burn.2024*Treatment+
                        invasive*Month+
                        Month*Treatment+
-                       (1|Planting/Treatment)+(1|Species)+(1|ID),
+                       (1|Planting/bucket)+(1|Species)+(1|ID),
                      family = binomial,
                      control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
@@ -235,7 +241,7 @@ ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
 
 ### 4) Month x Guild
 
-And finally, we see some evidence that the magnitude of seed removal by the two consumer guilds changed over time, but in different directions. In July, seed removal was equally strong between the two guilds. In October, more than twice as much seed removal was observed in depots allowing both rodents and inverts, compared to depots with inverts alone. Again, this makes complete sense given the rather cold weather we experienced in mid-October. This also supports the previous point about native vs. non-native species.
+And finally, we see some evidence that the magnitude of seed removal by the two consumer guilds changed over time, but in different directions. In July, seed removal by invertebrates was more than twice as strong compared to October. There was no significant change in rodent seed removal between the two months. This makes complete sense given the rather cold weather we experienced in mid-October. This also supports the previous point about native vs. non-native species.
 
 ```{r}
 emmeans(small.model, pairwise~Month*Treatment, type = 'response', adjust = 'Tukey')
@@ -258,7 +264,7 @@ ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
 ```
 
 ### 5) Month x Provenance
-Grouping species together as native vs non-native, we see that the problematic non-native species are almost 3x more likely to be removed in summer than fall. There is no difference in seed removal between native species in summer and fall. This could suggest that seed removal by inverts is key for non-native species as a whole.
+Grouping species together as native vs non-native, we see that the problematic non-native species are almost 2.5x more likely to be removed in summer than fall. There is no difference in seed removal between native species in summer and fall. This could suggest that seed removal by inverts is key for non-native species as a whole.
 
 Probably want to keep the old species-by-species figure as a supplement to unpack these patterns.
 
@@ -267,7 +273,7 @@ emmeans(small.model, pairwise~Month*invasive, type = 'response', adjust = 'Tukey
 
 month.invasive.emm <- summary(emmeans(small.model, ~Month*invasive, type = 'response'))
 
-ggplot(month.invasive.emm, aes(x = invasive, y = prob, color = Month))+
+ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))+
   geom_point(position = position_dodge(width = 0.25), size = 5)+
   geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
              position = position_jitterdodge(dodge.width = 0.25,
