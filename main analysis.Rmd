@@ -1,0 +1,283 @@
+---
+title: "Part 1: Seed removal responses to management"
+author: "Pete Guiden"
+date: "2024-12-05"
+output: github_document
+---
+
+This code provides a preliminary inspection of seed removal data collected at 19 ReFUGE plots at Nachusa Grasslands in July and October 2024. 8 seeds of 7 species (list here) were placed cafeteria-style in buckets that allowed access to either invertebrates alone, or invertebrates and rodents. Plots vary in their management history (restoration age, bison presence, burn status for 2024).
+
+Expect this code to be the main data presented in a manuscript examining how management influences seed removal of native versus invasive plant species.
+
+```{r include = FALSE}
+# Load packages and data
+
+library(car)
+library(emmeans)
+library(lme4)
+library(multcomp)
+library(performance)
+library(tidylog)
+library(tidyverse)
+
+# GG plot theme code
+pal.theme <- theme(panel.grid.major = element_blank())+
+  theme(panel.background = element_blank())+
+  theme(panel.grid.minor = element_blank())+
+  theme(axis.title = element_text(size = 16, color = 'black'))+
+  theme(axis.text = element_text(size = 12, color = 'black'))+
+  theme(panel.border = element_rect(linewidth = 2, color = 'black', fill = NA))+
+  theme(strip.text.y = element_text(size = 12))+
+  theme(strip.background.y = element_rect(fill = NA))
+
+grid.url <- "https://raw.githubusercontent.com/pguiden-pal/refuge-seed-removal/refs/heads/main/data/REFUGE%20grid%20data.csv"
+plantings <- read.csv(url(grid.url))
+
+# Define a list of invasives:
+invasives <- c('LOCO', 'LOMA', 'TRRE')
+
+seed.url <- "https://raw.githubusercontent.com/pguiden-pal/refuge-seed-removal/refs/heads/main/data/REFUGE%20seed%20removal%202.csv"
+seed.data <- read.csv(url(seed.url)) %>% 
+  filter(is.na(Number.of.seeds.intact) == FALSE) %>% 
+  mutate(total.seeds = ifelse(Number.of.seeds.intact > 8, Number.of.seeds.intact, 8),
+         intact.seeds = Number.of.seeds.intact,
+         removed.seeds = total.seeds-intact.seeds,
+         prop.intact.seeds = intact.seeds/total.seeds,
+         invasive = ifelse(Species %in% invasives, 'invasive', 'native')) %>% 
+  left_join(plantings, by = "Planting") %>% 
+  mutate(rest.age = 2024-Year.restored)
+
+```
+
+## Inspecting the data
+
+First step is to inspect the data before running any analyses. 
+
+There is one tricky things about the data that should be mentioned: while we only put 8 seeds per species in each bucket, some buckets had >8 seeds of a species found. This is a low proportion (n = 14 cases out of 531 species-bucket combinations, or 2.6%). My current resolution for this was to assume that these cases had no seed removal of that species, and to recalculate the total number of starting seeds to be whatever the number of intact seeds recovered was. Should be a conservative way to estimate seed removal without losing data, although I suspect running models with and without these species/bucket combos will yield very similar outcomes.
+
+We can also check out some quick and dirty figures summarizing the data. Looks like no issues with zero-inflation, etc., so a binomial glmer() should work ok.
+
+```{r, include=TRUE}
+summary(seed.data)
+
+# How many buckets had more than 8 seeds recovered per species?
+length(filter(seed.data, intact.seeds > 8)$ID)
+length(filter(seed.data, intact.seeds > 8)$ID)/length(seed.data$ID)
+
+ggplot(seed.data, aes(x = Species, fill = Treatment, y = prop.intact.seeds))+
+  facet_wrap(~Month)+
+  geom_boxplot()
+
+ggplot(seed.data, aes(x = prop.intact.seeds, fill = Treatment))+
+  facet_wrap(Month~Species)+
+  geom_histogram()
+```
+
+## Model construction
+After inspecting the data, we can run some models. 
+
+Before modeling for real, I like to run an lmer() strictly to check the denominator DF's to make sure the model is accurately interpreting our experimental design (following the advice of Arnqvist 2020 TREE). For example, any management action should be replicated at the planting level, not the bucket level (so it should have ~18 DDFs instead of ~500 DDFs). After some tinkering, I ended up with a random intercept term nesting Treatment inside Planting (i.e., (1|Planting/Treatment)), which makes sense. I also add a random intercept for the unit of replication (i.e., species-planting-month combination, which matches the ID column; (1|ID)), which helps account for overdispersion in binomial/Poisson models. 
+
+It bears repeating but *we don't care about the coefficients or P-values here*; this exercise is simply done to eyeball the denominator degrees of freedom to increase our confidence about random effects structures.
+
+```{r, include = TRUE}
+# Check with regular lmer: Treatment is nested within Planting!
+seed.model.check = lmer(data = seed.data,
+                   prop.intact.seeds~Treatment*invasive+Month+Bison*Burn.2024+
+                     (1|Planting/Treatment)+
+                     (1|Species))
+Anova(seed.model.check, test = 'F')
+```
+
+After the random effects are structure properly, we can get into the real modeling. Since we're interested in knowing the proportion of seeds removed, we'll use a binomial GLMM withn the cbind() function. Note that the order of terms in cbind() matters; here we'll go cbind(removed, intact) to express results as the **proportion of seeds removed**. We'll use this convention throughout. 
+
+As far as structuring the model, we have some decisions to make. We have six key variables we are hypothesizing to be important: age (continuous, no remnants), bison (present/absent), fire (burned/unburned), treatment (inverts, rodents+inverts), month (Jul, Oct), and species (7 levels). **We will keep all of these main effects in the model**. However, we also have reason to think that interactions might be important (e.g., bison might affect rodents and inverts differently). We'll use model selection (MuMIn package) to tell us which interactions are the most important, starting with a global model with....6 main effects and 15(!!!) interactive effects. Unsurprisingly, the global model has two key weaknesses: 1) model diagnostics suggest problems (huge VIF, etc.) and 2) model convergence requires a lot of computer power (~90 minutes on my machine). Code for this model selection process is hidden in a code chunk below, but is commented out because it takes >3 hours to perform. We decided *a priori* in a Dec 5 meeting to retain the simplest top model. R returned 4 models with <2 AICc, and no clear winner. Therefore, we'll keep the simplest of the "best" 4 models; it has the added bonus of slightly nicer model diagnostics, too. 
+```{r, fig.height = 12, echo = FALSE}
+######## Global model first
+
+#### Could try scaling restoration age?
+### Works with 2e6 iterations, but takes approx 90 min
+#big.model <- glmer(data = seed.data,
+#                   cbind(removed.seeds, intact.seeds)~
+#                     Treatment*invasive+
+#                     Treatment*Month+
+#                     Treatment*rest.age+
+#                     Treatment*Bison+
+#                     Treatment*Burn.2024+
+#                     invasive*Month+
+#                     invasive*rest.age+
+#                     invasive*Bison+
+#                     Month*rest.age+
+#                   Month*Bison+
+#                   Month*Burn.2024+
+#                  rest.age*Bison+
+#               rest.age*Burn.2024+
+#                Bison*Burn.2024+
+    #                 # Probably need to add an ID row for overdispersion....
+ #              (1|Planting/Treatment)+(1|Species)+(1|ID),
+  #                family = binomial,
+  #              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
+#check_model(big.model)
+#check_convergence(big.model)
+#check_collinearity(big.model)
+#plot(check_residuals(big.model))
+#Anova(big.model)
+
+#### Model selection time
+### This works but takes a long time!!!
+#library(MuMIn)
+#options(na.action = 'na.fail')
+#seed.model.dredge <- dredge(big.model, rank = AICc, beta = 'none', evaluate = TRUE)
+
+#options(na.action = 'na.omit')
+#summary(model.avg(seed.model.dredge, subset = delta <= 2))
+
+  # And here's the top model:
+small.model <- glmer(data = seed.data,
+                     cbind(removed.seeds, intact.seeds)~
+                       Bison+Burn.2024+Month+invasive+Treatment+
+                       #Should we include this in the model if it didn't pop? Probs...
+                       rest.age+
+                       Bison*Burn.2024+
+                       Bison*Treatment+
+                       Burn.2024*Treatment+
+                       invasive*Month+
+                       Month*Treatment+
+                       (1|Planting/Treatment)+(1|Species)+(1|ID),
+                     family = binomial,
+                     control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+check_model(small.model)
+
+# A very long list of model coefficients
+summary(small.model)
+
+# P-values and Chi-squared for key effects
+Anova(small.model)
+```
+
+## Model output
+
+Ok, lots to unpack here! We'll use the emmeans package to visualize key interactive effects, including post-hoc tests to determine significance between categorical groups. There are five significant interactions to examine:
+
+### 1) Bison x Fire
+
+Averaged across all treatments, plantings that both were burned and allowed bison access had the lowest amount of seed removal. Some interesting tidbits:
+-Looking only at plots with bison access, seed removal was **7 times lower** in burned vs unburned plots
+-Looking only at unburned plots, there's no difference in seed removal between bison absent and bison present plots. This suggests that you really might want both management practices if minimizing seed removal is important.
+
+```{r, echo = FALSE}
+emmeans(small.model, pairwise~Bison*Burn.2024, type = 'response', adjust = 'Tukey')
+
+bison.fire.emm <- summary(emmeans(small.model, ~Bison*Burn.2024, type = 'response'))
+
+ggplot(bison.fire.emm, aes(x = Bison, y = prob, color = Burn.2024))+
+  geom_point(position = position_dodge(width = 0.25), size = 5)+
+  geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
+             position = position_jitterdodge(dodge.width = 0.25,
+                                             jitter.height = 0.05,
+                                             jitter.width = 0.05))+
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25,
+                position = position_dodge(width = 0.25))+
+  labs(x = '', y = 'Proportion of seeds removed')+
+  scale_y_continuous(limits = c(-0.05, 1.05))+
+  scale_color_manual(values = c('firebrick', 'slateblue'))+
+  pal.theme
+```
+
+### 2) Bison x Guild
+Now we can start looking at how management affects different granivore guilds. First up, a significant bison x guild interaction. Key take-home here is that in the Inverts only depots, there is no difference in seed removal between plots with and without bison. However, where rodents and inverts both are able to access seeds, we see 2.5 times more seed removal in plots without bison compared to plots with bison. I interpret this as perhaps evidence that there is a behavioral change in rodents where bison are present (Guiden et al. 2022 Ecology).
+
+```{r}
+emmeans(small.model, pairwise~Bison*Treatment, type = 'response', adjust = 'Tukey')
+
+bison.treat.emm <- summary(emmeans(small.model, ~Bison*Treatment, type = 'response'))
+
+ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
+  geom_point(position = position_dodge(width = 0.25), size = 5)+
+  geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
+             position = position_jitterdodge(dodge.width = 0.25,
+                                             jitter.height = 0.05,
+                                             jitter.width = 0.05))+
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25,
+                position = position_dodge(width = 0.25))+
+  labs(x = '', y = 'Proportion of seeds removed')+
+  scale_y_continuous(limits = c(-0.05, 1.05))+
+  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  pal.theme
+```
+
+### 3) Fire x Guild
+Burning seems to increase seed removal, but only by rodents. There is no difference between Invert-only depots in burned versus unburned plantings. On the other hand, depots allowing inverts and rodents experienced 4x greater seed removal in unburned areas vs burned areas (thatch = vole city?). There's also a compelling increase in seed removal between unburned plantings allowing rodents compared to unburned plantings with only inverts.
+
+```{r}
+emmeans(small.model, pairwise~Burn.2024*Treatment, type = 'response', adjust = 'Tukey')
+
+fire.treat.emm <- summary(emmeans(small.model, ~Burn.2024*Treatment, type = 'response'))
+
+ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
+  geom_point(position = position_dodge(width = 0.25), size = 5)+
+  geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
+             position = position_jitterdodge(dodge.width = 0.25,
+                                             jitter.height = 0.05,
+                                             jitter.width = 0.05))+
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25,
+                position = position_dodge(width = 0.25))+
+  labs(x = '', y = 'Proportion of seeds removed')+
+  scale_y_continuous(limits = c(-0.05, 1.05))+
+  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  pal.theme
+```
+
+
+### 4) Month x Guild
+
+And finally, we see some evidence that the magnitude of seed removal by the two consumer guilds changed over time, but in different directions. In July, seed removal was equally strong between the two guilds. In October, more than twice as much seed removal was observed in depots allowing both rodents and inverts, compared to depots with inverts alone. Again, this makes complete sense given the rather cold weather we experienced in mid-October. This also supports the previous point about native vs. non-native species.
+
+```{r}
+emmeans(small.model, pairwise~Month*Treatment, type = 'response', adjust = 'Tukey')
+
+month.treatment.emm <- summary(emmeans(small.model, ~Month*Treatment, type = 'response'))
+
+ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
+  geom_point(position = position_dodge(width = 0.25), size = 5)+
+  geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
+             position = position_jitterdodge(dodge.width = 0.25,
+                                             jitter.height = 0.05,
+                                             jitter.width = 0.05))+
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25,
+                position = position_dodge(width = 0.25))+
+  labs(x = '', y = 'Proportion of seeds removed')+
+  scale_y_continuous(limits = c(-0.05, 1.05))+
+  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  pal.theme
+```
+
+### 5) Month x Provenance
+Grouping species together as native vs non-native, we see that the problematic non-native species are almost 3x more likely to be removed in summer than fall. There is no difference in seed removal between native species in summer and fall. This could suggest that seed removal by inverts is key for non-native species as a whole.
+
+Probably want to keep the old species-by-species figure as a supplement to unpack these patterns.
+
+```{r}
+emmeans(small.model, pairwise~Month*invasive, type = 'response', adjust = 'Tukey')
+
+month.invasive.emm <- summary(emmeans(small.model, ~Month*invasive, type = 'response'))
+
+ggplot(month.invasive.emm, aes(x = invasive, y = prob, color = Month))+
+  geom_point(position = position_dodge(width = 0.25), size = 5)+
+  geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
+             position = position_jitterdodge(dodge.width = 0.25,
+                                             jitter.height = 0.05,
+                                             jitter.width = 0.05))+
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25,
+                position = position_dodge(width = 0.25))+
+  labs(x = '', y = 'Proportion of seeds removed')+
+  scale_y_continuous(limits = c(-0.05, 1.05))+
+  scale_color_manual(values = c('forestgreen', 'sienna'))+
+  pal.theme
+```
