@@ -322,6 +322,7 @@ fig.1f <- ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))
   pal.theme
 fig.1f
 ```
+
 ## Final figure output
 
 Ok, now to glue these key findings into a single 6-panel figure using the "patchwork" package. Outputting this in a nice large dimension, although I will touch up with powerpoint/illustrator to add letters, extra space between the columns, and center/relabel color legends. 

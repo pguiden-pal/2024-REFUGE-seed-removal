@@ -12,6 +12,7 @@ Pete Guiden
   - [4) Fire x Guild](#4-fire-x-guild)
   - [5) Month x Guild](#5-month-x-guild)
   - [6) Month x Provenance](#6-month-x-provenance)
+- [Final figure output](#final-figure-output)
 
 This code provides a preliminary inspection of seed removal data
 collected at 19 ReFUGE plots at Nachusa Grasslands in July and October
@@ -653,8 +654,9 @@ fig.1f <- ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))
 fig.1f
 ```
 
-![](main_analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- --> \##
-Final figure output
+![](main_analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+## Final figure output
 
 Ok, now to glue these key findings into a single 6-panel figure using
 the “patchwork” package. Outputting this in a nice large dimension,
