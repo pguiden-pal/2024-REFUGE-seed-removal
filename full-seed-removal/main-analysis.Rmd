@@ -2,9 +2,7 @@
 title: "Part 1: Seed removal responses to management"
 author: "Pete Guiden"
 date: "2024-12-05"
-output: github_document:
-  toc: true
-  toc_depth: 3
+output: github_document
 ---
 
 This code provides a preliminary inspection of seed removal data collected at 19 ReFUGE plots at Nachusa Grasslands in July and October 2024. 8 seeds of 7 species (list here) were placed cafeteria-style in buckets that allowed access to either invertebrates alone, or invertebrates and rodents. Plots vary in their management history (restoration age, bison presence, burn status for 2024).
@@ -168,26 +166,7 @@ Anova(small.model)
 
 Ok, lots to unpack here! We'll use the emmeans package to visualize key interactive effects, including post-hoc tests to determine significance between categorical groups. There are five significant interactions to examine:
 
-### 1) Restoration age
-
-A simple linear increase here--older plantings experienced more seed removal than younger ones. The oldest of our plantings(37 years) experienced 3.5x more seed removal than the youngest plantings (11 years). Not that this figure does not include remnants.
-
-```{r}
-age.emm <- summary(emmeans(small.model, ~rest.age, type = 'response',
-                           at = list(rest.age = seq(11, 37.50, 0.50))))
-
-ggplot(age.emm, aes(x = rest.age, y = prob))+
-  geom_line(size = 1.5)+
-  geom_jitter(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1)+
-  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL),
-                size = 1.25, width = 0.25, fill = 'grey50', alpha = 0.2, color = NA)+
-  labs(x = 'Restoration age (years)', y = 'Proportion of seeds removed')+
-  scale_x_continuous(limits = c(10, 40))+
-  #scale_color_manual(values = c('forestgreen', 'sienna'))+
-  pal.theme
-```
-
-### 2) Bison x Fire
+### 1) Bison x Fire
 
 Averaged across all treatments, plantings that both were burned and allowed bison access had the lowest amount of seed removal. Some interesting tidbits:
 -Looking only at plots with bison access, seed removal was **7 times lower** in burned vs unburned plots
@@ -213,8 +192,7 @@ ggplot(bison.fire.emm, aes(x = Bison, y = prob, color = Burn.2024))+
   pal.theme
 ```
 
-### 3) Bison x Guild
-
+### 2) Bison x Guild
 Now we can start looking at how management affects different granivore guilds. First up, a significant bison x guild interaction. Key take-home here is that in the Inverts only depots, there is no difference in seed removal between plots with and without bison. However, where rodents and inverts both are able to access seeds, we see 2.5 times more seed removal in plots without bison compared to plots with bison. I interpret this as perhaps evidence that there is a behavioral change in rodents where bison are present (Guiden et al. 2022 Ecology).
 
 ```{r}
@@ -237,8 +215,7 @@ ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
   pal.theme
 ```
 
-### 4) Fire x Guild
-
+### 3) Fire x Guild
 Burning seems to increase seed removal, but only by rodents. There is no difference between Invert-only depots in burned versus unburned plantings. On the other hand, depots allowing inverts and rodents experienced 4x greater seed removal in unburned areas vs burned areas (thatch = vole city?). There's also a compelling increase in seed removal between unburned plantings allowing rodents compared to unburned plantings with only inverts.
 
 ```{r}
@@ -262,7 +239,7 @@ ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
 ```
 
 
-### 5) Month x Guild
+### 4) Month x Guild
 
 And finally, we see some evidence that the magnitude of seed removal by the two consumer guilds changed over time, but in different directions. In July, seed removal by invertebrates was more than twice as strong compared to October. There was no significant change in rodent seed removal between the two months. This makes complete sense given the rather cold weather we experienced in mid-October. This also supports the previous point about native vs. non-native species.
 
@@ -286,8 +263,7 @@ ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
   pal.theme
 ```
 
-### 6) Month x Provenance
-
+### 5) Month x Provenance
 Grouping species together as native vs non-native, we see that the problematic non-native species are almost 2.5x more likely to be removed in summer than fall. There is no difference in seed removal between native species in summer and fall. This could suggest that seed removal by inverts is key for non-native species as a whole.
 
 Probably want to keep the old species-by-species figure as a supplement to unpack these patterns.
@@ -312,5 +288,21 @@ ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))+
   pal.theme
 ```
 
+### 6) Restoration age
 
+```{r}
+age.emm <- summary(emmeans(small.model, ~rest.age, type = 'response',
+                           at = list(rest.age = seq(11, 37.50, 0.50))))
+
+ggplot(age.emm, aes(x = rest.age, y = prob))+
+  geom_line(size = 1.5)+
+  geom_jitter(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1)+
+  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                size = 1.25, width = 0.25, fill = 'grey50', alpha = 0.2, color = NA,
+                position = position_dodge(width = 0.25))+
+  labs(x = 'Restoration age (years)', y = 'Proportion of seeds removed')+
+  #scale_y_continuous(limits = c(-0.05, 1.05))+
+  #scale_color_manual(values = c('forestgreen', 'sienna'))+
+  pal.theme
+```
 
