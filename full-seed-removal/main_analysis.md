@@ -457,7 +457,7 @@ fig.1c <- ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
                 position = position_dodge(width = 0.25))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
-  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  scale_color_manual(values = c('royalblue', 'sienna'))+
   pal.theme+guides(color = 'none')
 fig.1c
 ```
@@ -523,7 +523,7 @@ fig.1d <- ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment)
                 position = position_dodge(width = 0.25))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
-  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  scale_color_manual(values = c('royalblue', 'sienna'))+
   pal.theme
 fig.1d
 ```
@@ -589,7 +589,7 @@ fig.1e <- ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment
                 position = position_dodge(width = 0.25))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
-  scale_color_manual(values = c('royalblue', 'goldenrod1'))+
+  scale_color_manual(values = c('royalblue', 'sienna'))+
   pal.theme+guides(color = 'none')
 fig.1e
 ```
@@ -649,7 +649,7 @@ fig.1f <- ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))
                 position = position_dodge(width = 0.25))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
-  scale_color_manual(values = c('forestgreen', 'sienna'))+
+  scale_color_manual(values = c('orange', 'forestgreen'))+
   pal.theme
 fig.1f
 ```
