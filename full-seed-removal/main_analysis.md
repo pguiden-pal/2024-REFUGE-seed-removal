@@ -3,6 +3,16 @@ Part 1: Seed removal responses to management
 Pete Guiden
 2024-12-05
 
+- [Inspecting the data](#inspecting-the-data)
+- [Model construction](#model-construction)
+- [Model output](#model-output)
+  - [1) Restoration age](#1-restoration-age)
+  - [2) Bison x Fire](#2-bison-x-fire)
+  - [3) Bison x Guild](#3-bison-x-guild)
+  - [4) Fire x Guild](#4-fire-x-guild)
+  - [5) Month x Guild](#5-month-x-guild)
+  - [6) Month x Provenance](#6-month-x-provenance)
+
 This code provides a preliminary inspection of seed removal data
 collected at 19 ReFUGE plots at Nachusa Grasslands in July and October
 2024. 8 seeds of 7 species (list here) were placed cafeteria-style in
@@ -230,57 +240,57 @@ added bonus of slightly nicer model diagnostics, too.
     ## Fixed effects:
     ##                                                Estimate Std. Error z value
     ## (Intercept)                                     -1.7310     0.5343  -3.240
-    ## Bisonno bison                                    1.0319     0.5538   1.864
-    ## Burn.2024unburned                                1.7682     0.7531   2.348
+    ## BisonNo bison                                    1.0319     0.5538   1.864
+    ## Burn.2024Unburned                                1.7682     0.7531   2.348
     ## MonthOctober                                    -1.7582     0.4316  -4.074
-    ## invasivenative                                  -0.6162     0.2792  -2.207
+    ## invasiveNative                                  -0.6162     0.2792  -2.207
     ## TreatmentRodents and Inverts                    -1.6328     0.5975  -2.733
     ## scale(rest.age)                                  0.3823     0.2046   1.868
-    ## Bisonno bison:Burn.2024unburned                 -2.4128     0.7567  -3.189
-    ## Bisonno bison:TreatmentRodents and Inverts       1.1955     0.5938   2.013
-    ## Burn.2024unburned:TreatmentRodents and Inverts   1.0819     0.5688   1.902
-    ## MonthOctober:invasivenative                      1.3802     0.2844   4.853
+    ## BisonNo bison:Burn.2024Unburned                 -2.4128     0.7567  -3.189
+    ## BisonNo bison:TreatmentRodents and Inverts       1.1955     0.5938   2.013
+    ## Burn.2024Unburned:TreatmentRodents and Inverts   1.0819     0.5688   1.902
+    ## MonthOctober:invasiveNative                      1.3802     0.2844   4.853
     ## MonthOctober:TreatmentRodents and Inverts        1.4104     0.5583   2.526
     ##                                                Pr(>|z|)    
     ## (Intercept)                                     0.00120 ** 
-    ## Bisonno bison                                   0.06239 .  
-    ## Burn.2024unburned                               0.01889 *  
+    ## BisonNo bison                                   0.06239 .  
+    ## Burn.2024Unburned                               0.01889 *  
     ## MonthOctober                                   4.62e-05 ***
-    ## invasivenative                                  0.02733 *  
+    ## invasiveNative                                  0.02733 *  
     ## TreatmentRodents and Inverts                    0.00628 ** 
     ## scale(rest.age)                                 0.06173 .  
-    ## Bisonno bison:Burn.2024unburned                 0.00143 ** 
-    ## Bisonno bison:TreatmentRodents and Inverts      0.04408 *  
-    ## Burn.2024unburned:TreatmentRodents and Inverts  0.05718 .  
-    ## MonthOctober:invasivenative                    1.22e-06 ***
+    ## BisonNo bison:Burn.2024Unburned                 0.00143 ** 
+    ## BisonNo bison:TreatmentRodents and Inverts      0.04408 *  
+    ## Burn.2024Unburned:TreatmentRodents and Inverts  0.05718 .  
+    ## MonthOctober:invasiveNative                    1.22e-06 ***
     ## MonthOctober:TreatmentRodents and Inverts       0.01153 *  
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## Correlation of Fixed Effects:
-    ##             (Intr) Bsnnbs B.2024 MnthOc invsvn TrtRaI scl(.) Bb:B.2 Bb:TaI
-    ## Bisonnbison -0.710                                                        
-    ## Brn.2024nbr -0.572  0.502                                                 
+    ##             (Intr) BsnNbs B.2024 MnthOc invsvN TrtRaI scl(.) BNb:B. BNb:aI
+    ## BisonNbison -0.710                                                        
+    ## Brn.2024Unb -0.572  0.502                                                 
     ## MonthOctobr -0.389  0.012 -0.003                                          
-    ## invasiventv -0.281 -0.007 -0.012  0.179                                   
+    ## invasiveNtv -0.281 -0.007 -0.012  0.179                                   
     ## TrtmntRdnaI -0.519  0.309  0.094  0.310  0.008                            
     ## scal(rst.g) -0.476  0.518  0.636  0.003 -0.012 -0.001                     
-    ## Bbsn:B.2024  0.484 -0.629 -0.821 -0.001  0.013  0.032 -0.590              
-    ## Bbsn:TrtRaI  0.330 -0.519  0.066 -0.015 -0.009 -0.633  0.000 -0.029       
-    ## B.2024:TRaI  0.168  0.069 -0.379  0.003 -0.002 -0.334  0.003 -0.008 -0.100
-    ## MnthOctbr:n  0.131  0.007  0.009 -0.396 -0.497 -0.011  0.014 -0.012  0.010
+    ## BNb:B.2024U  0.484 -0.629 -0.821 -0.001  0.013  0.032 -0.590              
+    ## BsnNbs:TRaI  0.330 -0.519  0.066 -0.015 -0.009 -0.633  0.000 -0.029       
+    ## B.2024U:TaI  0.168  0.069 -0.379  0.003 -0.002 -0.334  0.003 -0.008 -0.100
+    ## MnthOctbr:N  0.131  0.007  0.009 -0.396 -0.497 -0.011  0.014 -0.012  0.010
     ## MnthOc:TRaI  0.261 -0.007  0.006 -0.659 -0.003 -0.493 -0.003 -0.004  0.028
-    ##             B.20aI MnthO:
-    ## Bisonnbison              
-    ## Brn.2024nbr              
+    ##             B.20aI MntO:N
+    ## BisonNbison              
+    ## Brn.2024Unb              
     ## MonthOctobr              
-    ## invasiventv              
+    ## invasiveNtv              
     ## TrtmntRdnaI              
     ## scal(rst.g)              
-    ## Bbsn:B.2024              
-    ## Bbsn:TrtRaI              
-    ## B.2024:TRaI              
-    ## MnthOctbr:n  0.006       
+    ## BNb:B.2024U              
+    ## BsnNbs:TRaI              
+    ## B.2024U:TaI              
+    ## MnthOctbr:N  0.006       
     ## MnthOc:TRaI  0.009  0.019
     ## optimizer (bobyqa) convergence code: 0 (OK)
     ## boundary (singular) fit: see help('isSingular')
@@ -307,8 +317,8 @@ added bonus of slightly nicer model diagnostics, too.
 
 Ok, lots to unpack here! We’ll use the emmeans package to visualize key
 interactive effects, including post-hoc tests to determine significance
-between categorical groups. There are five significant interactions to
-examine:
+between categorical groups. There is one significant main effect and
+five significant interactions to examine:
 
 ### 1) Restoration age
 
@@ -321,7 +331,7 @@ years). Not that this figure does not include remnants.
 age.emm <- summary(emmeans(small.model, ~rest.age, type = 'response',
                            at = list(rest.age = seq(11, 37.50, 0.50))))
 
-ggplot(age.emm, aes(x = rest.age, y = prob))+
+fig.1a<- ggplot(age.emm, aes(x = rest.age, y = prob))+
   geom_line(size = 1.5)+
   geom_jitter(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1)+
   geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL),
@@ -341,6 +351,10 @@ ggplot(age.emm, aes(x = rest.age, y = prob))+
     ## Warning in geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL), size = 1.25, :
     ## Ignoring unknown parameters: `width`
 
+``` r
+fig.1a
+```
+
     ## Warning: Removed 56 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
@@ -358,10 +372,10 @@ both management practices if minimizing seed removal is important.
 
     ## $emmeans
     ##  Bison    Burn.2024   prob     SE  df asymp.LCL asymp.UCL
-    ##  bison    burned    0.0458 0.0178 Inf    0.0212    0.0962
-    ##  no bison burned    0.1967 0.0403 Inf    0.1293    0.2875
-    ##  bison    unburned  0.3257 0.1048 Inf    0.1594    0.5516
-    ##  no bison unburned  0.1808 0.0418 Inf    0.1127    0.2773
+    ##  Bison    Burned    0.0458 0.0178 Inf    0.0212    0.0962
+    ##  No bison Burned    0.1967 0.0403 Inf    0.1293    0.2875
+    ##  Bison    Unburned  0.3257 0.1048 Inf    0.1594    0.5516
+    ##  No bison Unburned  0.1808 0.0418 Inf    0.1127    0.2773
     ## 
     ## Results are averaged over the levels of: Month, invasive, Treatment 
     ## Confidence level used: 0.95 
@@ -369,12 +383,12 @@ both management practices if minimizing seed removal is important.
     ## 
     ## $contrasts
     ##  contrast                            odds.ratio     SE  df null z.ratio p.value
-    ##  bison burned / no bison burned          0.1960 0.0928 Inf    1  -3.441  0.0032
-    ##  bison burned / bison unburned           0.0993 0.0692 Inf    1  -3.313  0.0051
-    ##  bison burned / no bison unburned        0.2174 0.1100 Inf    1  -3.016  0.0137
-    ##  no bison burned / bison unburned        0.5069 0.2571 Inf    1  -1.339  0.5377
-    ##  no bison burned / no bison unburned     1.1092 0.3831 Inf    1   0.300  0.9906
-    ##  bison unburned / no bison unburned      2.1883 1.1085 Inf    1   1.546  0.4099
+    ##  Bison Burned / No bison Burned          0.1960 0.0928 Inf    1  -3.441  0.0032
+    ##  Bison Burned / Bison Unburned           0.0993 0.0692 Inf    1  -3.313  0.0051
+    ##  Bison Burned / No bison Unburned        0.2174 0.1100 Inf    1  -3.016  0.0137
+    ##  No bison Burned / Bison Unburned        0.5069 0.2571 Inf    1  -1.339  0.5377
+    ##  No bison Burned / No bison Unburned     1.1092 0.3831 Inf    1   0.300  0.9906
+    ##  Bison Unburned / No bison Unburned      2.1883 1.1085 Inf    1   1.546  0.4099
     ## 
     ## Results are averaged over the levels of: Month, invasive, Treatment 
     ## P value adjustment: tukey method for comparing a family of 4 estimates 
@@ -399,10 +413,10 @@ emmeans(small.model, pairwise~Bison*Treatment, type = 'response', adjust = 'Tuke
 
     ## $emmeans
     ##  Bison    Treatment            prob     SE  df asymp.LCL asymp.UCL
-    ##  bison    Inverts             0.156 0.0482 Inf    0.0827     0.275
-    ##  no bison Inverts             0.134 0.0316 Inf    0.0834     0.209
-    ##  bison    Rodents and Inverts 0.111 0.0364 Inf    0.0575     0.205
-    ##  no bison Rodents and Inverts 0.258 0.0507 Inf    0.1718     0.369
+    ##  Bison    Inverts             0.156 0.0482 Inf    0.0827     0.275
+    ##  No bison Inverts             0.134 0.0316 Inf    0.0834     0.209
+    ##  Bison    Rodents and Inverts 0.111 0.0364 Inf    0.0575     0.205
+    ##  No bison Rodents and Inverts 0.258 0.0507 Inf    0.1718     0.369
     ## 
     ## Results are averaged over the levels of: Burn.2024, Month, invasive 
     ## Confidence level used: 0.95 
@@ -410,12 +424,12 @@ emmeans(small.model, pairwise~Bison*Treatment, type = 'response', adjust = 'Tuke
     ## 
     ## $contrasts
     ##  contrast                                                 odds.ratio    SE  df
-    ##  bison Inverts / no bison Inverts                              1.191 0.514 Inf
-    ##  bison Inverts / bison Rodents and Inverts                     1.472 0.720 Inf
-    ##  bison Inverts / no bison Rodents and Inverts                  0.530 0.229 Inf
-    ##  no bison Inverts / bison Rodents and Inverts                  1.236 0.538 Inf
-    ##  no bison Inverts / no bison Rodents and Inverts               0.445 0.153 Inf
-    ##  bison Rodents and Inverts / no bison Rodents and Inverts      0.360 0.155 Inf
+    ##  Bison Inverts / No bison Inverts                              1.191 0.514 Inf
+    ##  Bison Inverts / Bison Rodents and Inverts                     1.472 0.720 Inf
+    ##  Bison Inverts / No bison Rodents and Inverts                  0.530 0.229 Inf
+    ##  No bison Inverts / Bison Rodents and Inverts                  1.236 0.538 Inf
+    ##  No bison Inverts / No bison Rodents and Inverts               0.445 0.153 Inf
+    ##  Bison Rodents and Inverts / No bison Rodents and Inverts      0.360 0.155 Inf
     ##  null z.ratio p.value
     ##     1   0.404  0.9777
     ##     1   0.791  0.8586
@@ -431,7 +445,7 @@ emmeans(small.model, pairwise~Bison*Treatment, type = 'response', adjust = 'Tuke
 ``` r
 bison.treat.emm <- summary(emmeans(small.model, ~Bison*Treatment, type = 'response'))
 
-ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
+fig.1c <- ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
   geom_point(position = position_dodge(width = 0.25), size = 5)+
   geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
              position = position_jitterdodge(dodge.width = 0.25,
@@ -443,7 +457,8 @@ ggplot(bison.treat.emm, aes(x = Bison, y = prob, color = Treatment))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
   scale_color_manual(values = c('royalblue', 'goldenrod1'))+
-  pal.theme
+  pal.theme+guides(color = 'none')
+fig.1c
 ```
 
 ![](main_analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
@@ -464,10 +479,10 @@ emmeans(small.model, pairwise~Burn.2024*Treatment, type = 'response', adjust = '
 
     ## $emmeans
     ##  Burn.2024 Treatment             prob     SE  df asymp.LCL asymp.UCL
-    ##  burned    Inverts             0.1133 0.0304 Inf    0.0660     0.188
-    ##  unburned  Inverts             0.1831 0.0570 Inf    0.0961     0.321
-    ##  burned    Rodents and Inverts 0.0842 0.0239 Inf    0.0477     0.144
-    ##  unburned  Rodents and Inverts 0.3223 0.0805 Inf    0.1876     0.495
+    ##  Burned    Inverts             0.1133 0.0304 Inf    0.0660     0.188
+    ##  Unburned  Inverts             0.1831 0.0570 Inf    0.0961     0.321
+    ##  Burned    Rodents and Inverts 0.0842 0.0239 Inf    0.0477     0.144
+    ##  Unburned  Rodents and Inverts 0.3223 0.0805 Inf    0.1876     0.495
     ## 
     ## Results are averaged over the levels of: Bison, Month, invasive 
     ## Confidence level used: 0.95 
@@ -475,12 +490,12 @@ emmeans(small.model, pairwise~Burn.2024*Treatment, type = 'response', adjust = '
     ## 
     ## $contrasts
     ##  contrast                                                  odds.ratio     SE
-    ##  burned Inverts / unburned Inverts                              0.570 0.2808
-    ##  burned Inverts / burned Rodents and Inverts                    1.391 0.5177
-    ##  burned Inverts / unburned Rodents and Inverts                  0.269 0.1323
-    ##  unburned Inverts / burned Rodents and Inverts                  2.439 1.2372
-    ##  unburned Inverts / unburned Rodents and Inverts                0.471 0.2130
-    ##  burned Rodents and Inverts / unburned Rodents and Inverts      0.193 0.0943
+    ##  Burned Inverts / Unburned Inverts                              0.570 0.2808
+    ##  Burned Inverts / Burned Rodents and Inverts                    1.391 0.5177
+    ##  Burned Inverts / Unburned Rodents and Inverts                  0.269 0.1323
+    ##  Unburned Inverts / Burned Rodents and Inverts                  2.439 1.2372
+    ##  Unburned Inverts / Unburned Rodents and Inverts                0.471 0.2130
+    ##  Burned Rodents and Inverts / Unburned Rodents and Inverts      0.193 0.0943
     ##   df null z.ratio p.value
     ##  Inf    1  -1.141  0.6643
     ##  Inf    1   0.886  0.8120
@@ -496,7 +511,7 @@ emmeans(small.model, pairwise~Burn.2024*Treatment, type = 'response', adjust = '
 ``` r
 fire.treat.emm <- summary(emmeans(small.model, ~Burn.2024*Treatment, type = 'response'))
 
-ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
+fig.1d <- ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
   geom_point(position = position_dodge(width = 0.25), size = 5)+
   geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
              position = position_jitterdodge(dodge.width = 0.25,
@@ -509,6 +524,7 @@ ggplot(fire.treat.emm, aes(x = Burn.2024, y = prob, color = Treatment))+
   scale_y_continuous(limits = c(-0.05, 1.05))+
   scale_color_manual(values = c('royalblue', 'goldenrod1'))+
   pal.theme
+fig.1d
 ```
 
 ![](main_analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
@@ -561,7 +577,7 @@ emmeans(small.model, pairwise~Month*Treatment, type = 'response', adjust = 'Tuke
 ``` r
 month.treatment.emm <- summary(emmeans(small.model, ~Month*Treatment, type = 'response'))
 
-ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
+fig.1e <- ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
   geom_point(position = position_dodge(width = 0.25), size = 5)+
   geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
              position = position_jitterdodge(dodge.width = 0.25,
@@ -573,7 +589,8 @@ ggplot(month.treatment.emm, aes(x = Month, y = prob, color = Treatment))+
   labs(x = '', y = 'Proportion of seeds removed')+
   scale_y_continuous(limits = c(-0.05, 1.05))+
   scale_color_manual(values = c('royalblue', 'goldenrod1'))+
-  pal.theme
+  pal.theme+guides(color = 'none')
+fig.1e
 ```
 
 ![](main_analysis_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
@@ -595,10 +612,10 @@ emmeans(small.model, pairwise~Month*invasive, type = 'response', adjust = 'Tukey
 
     ## $emmeans
     ##  Month   invasive   prob     SE  df asymp.LCL asymp.UCL
-    ##  July    invasive 0.2348 0.0500 Inf    0.1511     0.346
-    ##  October invasive 0.0967 0.0251 Inf    0.0575     0.158
-    ##  July    native   0.1422 0.0322 Inf    0.0900     0.217
-    ##  October native   0.1869 0.0389 Inf    0.1222     0.275
+    ##  July    Invasive 0.2348 0.0500 Inf    0.1511     0.346
+    ##  October Invasive 0.0967 0.0251 Inf    0.0575     0.158
+    ##  July    Native   0.1422 0.0322 Inf    0.0900     0.217
+    ##  October Native   0.1869 0.0389 Inf    0.1222     0.275
     ## 
     ## Results are averaged over the levels of: Bison, Burn.2024, Treatment 
     ## Confidence level used: 0.95 
@@ -606,12 +623,12 @@ emmeans(small.model, pairwise~Month*invasive, type = 'response', adjust = 'Tukey
     ## 
     ## $contrasts
     ##  contrast                          odds.ratio    SE  df null z.ratio p.value
-    ##  July invasive / October invasive       2.866 0.931 Inf    1   3.243  0.0065
-    ##  July invasive / July native            1.852 0.517 Inf    1   2.207  0.1213
-    ##  July invasive / October native         1.335 0.488 Inf    1   0.791  0.8587
-    ##  October invasive / July native         0.646 0.242 Inf    1  -1.164  0.6496
-    ##  October invasive / October native      0.466 0.132 Inf    1  -2.704  0.0346
-    ##  July native / October native           0.721 0.219 Inf    1  -1.079  0.7024
+    ##  July Invasive / October Invasive       2.866 0.931 Inf    1   3.243  0.0065
+    ##  July Invasive / July Native            1.852 0.517 Inf    1   2.207  0.1213
+    ##  July Invasive / October Native         1.335 0.488 Inf    1   0.791  0.8587
+    ##  October Invasive / July Native         0.646 0.242 Inf    1  -1.164  0.6496
+    ##  October Invasive / October Native      0.466 0.132 Inf    1  -2.704  0.0346
+    ##  July Native / October Native           0.721 0.219 Inf    1  -1.079  0.7024
     ## 
     ## Results are averaged over the levels of: Bison, Burn.2024, Treatment 
     ## P value adjustment: tukey method for comparing a family of 4 estimates 
@@ -620,7 +637,7 @@ emmeans(small.model, pairwise~Month*invasive, type = 'response', adjust = 'Tukey
 ``` r
 month.invasive.emm <- summary(emmeans(small.model, ~Month*invasive, type = 'response'))
 
-ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))+
+fig.1f <- ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))+
   geom_point(position = position_dodge(width = 0.25), size = 5)+
   geom_point(data = seed.data, aes(y = 1-prop.intact.seeds), shape = 1,
              position = position_jitterdodge(dodge.width = 0.25,
@@ -633,6 +650,24 @@ ggplot(month.invasive.emm, aes(x = Month, y = prob, color = invasive))+
   scale_y_continuous(limits = c(-0.05, 1.05))+
   scale_color_manual(values = c('forestgreen', 'sienna'))+
   pal.theme
+fig.1f
 ```
 
-![](main_analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](main_analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- --> \##
+Final figure output
+
+Ok, now to glue these key findings into a single 6-panel figure using
+the “patchwork” package. Outputting this in a nice large dimension,
+although I will touch up with powerpoint/illustrator to add letters,
+extra space between the columns, and center/relabel color legends.
+
+``` r
+(fig.1a | fig.1b)/
+  (fig.1c|fig.1d)/
+  (fig.1e|fig.1f)
+```
+
+    ## Warning: Removed 56 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](main_analysis_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
