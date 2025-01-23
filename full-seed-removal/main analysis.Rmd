@@ -3,8 +3,8 @@ title: "Part 1: Seed removal responses to management"
 author: "Pete Guiden"
 date: "2024-12-05"
 output: github_document:
-  toc: true
   toc_depth: 3
+  toc: true
 ---
 
 This code provides a preliminary inspection of seed removal data collected at 19 ReFUGE plots at Nachusa Grasslands in July and October 2024. 8 seeds of 7 species (list here) were placed cafeteria-style in buckets that allowed access to either invertebrates alone, or invertebrates and rodents. Plots vary in their management history (restoration age, bison presence, burn status for 2024).
