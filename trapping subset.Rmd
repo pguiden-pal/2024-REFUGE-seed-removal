@@ -1,0 +1,428 @@
+---
+title: 'Part 2: Linking seed removal to rodent communities'
+author: "Pete Guiden"
+date: "2024-12-17"
+output:
+  github_document:
+    toc: true
+    toc_depth: 3
+---
+
+This code builds upon a previous file (main_analysis.Rmd) to test specific hypotheses about how management influences rodent communities, and how these rodent communities in turn shape seed removal. Specifically, we hypothesize that invasive species will be more likely to be removed in more diverse rodent communities. We will use locally-estimated structural equation modeling (piecewiseSEM package) to test the strength of these relationships, and parse out direct effects of management from indirect effects meditated through rodent communities. 
+
+Seed removal data collected at 19 ReFUGE plots at Nachusa Grasslands in July and October 2024. 8 seeds of 7 species (list here) were placed cafeteria-style in buckets ("seed depots") that allowed access to either invertebrates alone, or invertebrates and rodents. Plots vary in their managment history (restoration age, bison presence, burn status for 2024). Rodent data were collected at a subset of 8 plots for one week in July and October 2024. **For the following analyses, we will only look at data from these 8 plots, and will discard seed depots that allowed access to invertebrates only, as we would not expect these to correlate to rodent communities in any way.** 
+
+```{r setup, include=FALSE}
+
+# Load packages and data
+
+library(car)
+library(emmeans)
+library(lme4)
+library(multcomp)
+library(patchwork)
+library(piecewiseSEM)
+library(performance)
+library(tidylog)
+library(tidyverse)
+library(vegan)
+
+# GG plot theme code
+pal.theme <- theme(panel.grid.major = element_blank())+
+  theme(panel.background = element_blank())+
+  theme(panel.grid.minor = element_blank())+
+  theme(axis.title = element_text(size = 16, color = 'black'))+
+  theme(axis.text = element_text(size = 12, color = 'black'))+
+  theme(panel.border = element_rect(linewidth = 2, color = 'black', fill = NA))+
+  theme(strip.text.y = element_text(size = 12))+
+  theme(strip.background.y = element_rect(fill = NA))
+
+trap.url <- 'https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/refuge%20mammal%20data%20fall%202024%20only.csv'
+
+trap.data <- read.csv(trap.url) %>% 
+  mutate(Date = as.Date(date, format = '%m/%d/%Y'),
+         year = year(Date),
+         month = month(Date, label = TRUE, abbr = FALSE)) %>% 
+  filter(month != 'May')
+
+cnc <- trap.data %>% 
+  filter(capture_type == 'TNC' | capture_type == 'T') %>% 
+  group_by(planting, month) %>% 
+  count() %>% 
+  rename(closed.traps = 'n')
+summary(cnc)
+
+effort.url <- 'https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/nachusa%202024%20trapping%20effort.csv'
+
+effort <- read.csv(effort.url) %>% 
+  mutate(start.date = as.Date(start.date, format = '%m/%d/%y'),
+         end.date = as.Date(end.date, format = '%m/%d/%y'),
+         trap.nights = (as.numeric(end.date-start.date)+1)*25) %>% 
+  left_join(cnc, by = c('month', 'planting')) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(total.effort = trap.nights - 0.5*closed.traps) %>% 
+  select(c('planting', 'month', 'total.effort'))
+summary(effort)
+
+```
+## Step 1: Calculate rodent community metrics from raw data
+
+Before we can test hypotheses about We need to first transition from a list of events (captures, traps closed with no capture, etc.) to a summary of rodents in each month/planting combination. The first chunk of code here accomplishes this by calculating a) the number of captures (a measure of activity), b) the  number of unique individuals, and c) the number of captures per known individual (relative activity) for all species pooled, and then on a per-species basis. Finally, we end by calculating the inverse simpsons index (number of effective species, using vegan package) as a measure of rodent biodiversity. 
+
+We will ideally end up with a dataframe that has 16 rows (2 months x 8 plantings) and many columns (6ish per species, plus inverse simpsons index and planting, month, etc.). 
+
+```{r, include = FALSE}
+## Entire community
+total.caps.df <- trap.data %>% 
+  filter(tag_num != '') %>% 
+  group_by(planting, month) %>% 
+  summarise(total.caps = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(total.caps.100 = total.caps/total.effort*100) %>% 
+  select(-total.effort)
+
+total.ind.df <- trap.data %>% 
+  filter(tag_num != '', capture_type == 'N') %>% 
+  group_by(planting, month) %>% 
+  summarise(total.mt1 = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(total.mt1.100 = total.mt1/total.effort*100) %>% 
+  select(-total.effort)
+
+## P.man
+pman.caps.df <- trap.data %>% 
+  filter(tag_num != '', species == 'P.man') %>% 
+  group_by(planting, month) %>% 
+  summarise(pman.caps = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(pman.caps.100 = pman.caps/total.effort*100) %>% 
+  select(-total.effort)
+
+pman.ind.df <- trap.data %>% 
+  filter(tag_num != '', species == 'P.man', capture_type == 'N') %>% 
+  group_by(planting, month) %>% 
+  summarise(pman.mt1 = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(pman.mt1.100 = pman.mt1/total.effort*100) %>% 
+  select(-total.effort)
+
+## P.leu
+pleu.caps.df <- trap.data %>% 
+  filter(tag_num != '', species == 'P.leu') %>% 
+  group_by(planting, month) %>% 
+  summarise(pleu.caps = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(pleu.caps.100 = pleu.caps/total.effort*100) %>% 
+  select(-total.effort)
+
+pleu.ind.df <- trap.data %>% 
+  filter(tag_num != '', species == 'P.leu', capture_type == 'N') %>% 
+  group_by(planting, month) %>% 
+  summarise(pleu.mt1 = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(pleu.mt1.100 = pleu.mt1/total.effort*100) %>% 
+  select(-total.effort)
+
+## M.och
+moch.caps.df <- trap.data %>% 
+  filter(tag_num != '', species == 'M.och') %>% 
+  group_by(planting, month) %>% 
+  summarise(moch.caps = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(moch.caps.100 = moch.caps/total.effort*100) %>% 
+  select(-total.effort)
+
+moch.ind.df <- trap.data %>% 
+  filter(tag_num != '', species == 'M.och', capture_type == 'N') %>% 
+  group_by(planting, month) %>% 
+  summarise(moch.mt1 = length(species)) %>% 
+  left_join(effort, by = c('planting', 'month')) %>% 
+  mutate(moch.mt1.100 = moch.mt1/total.effort*100) %>% 
+  select(-total.effort)
+
+mat.prep <- trap.data %>%
+  filter(species != '', capture_type == 'N') %>% 
+  group_by(planting, month, species) %>% 
+  count() %>% 
+  spread(species, n) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(planting_month = paste(planting, month)) %>% 
+  ungroup() 
+
+row.ids <- mat.prep$planting_month
+is.mat <- as.matrix(mat.prep[,-c(1,2,10)])
+rownames(is.mat) <- row.ids
+
+inv.simp <- diversity(is.mat, index = 'invsimpson')
+is.df <- data.frame(planting = mat.prep[,1],
+                    month = mat.prep[,2],
+                    inv.simp = as.numeric(inv.simp))
+# Check that everything transfered correctly!!
+
+rodents <- effort %>% 
+  left_join(total.caps.df, by = c('planting', 'month')) %>% 
+  left_join(total.ind.df, by = c('planting', 'month')) %>% 
+  left_join(pman.caps.df, by = c('planting', 'month')) %>% 
+  left_join(pman.ind.df, by = c('planting', 'month')) %>% 
+  left_join(pleu.caps.df, by = c('planting', 'month')) %>% 
+  left_join(pleu.ind.df, by = c('planting', 'month')) %>% 
+  left_join(moch.caps.df, by = c('planting', 'month')) %>% 
+  left_join(moch.ind.df, by = c('planting', 'month')) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(pman.rel.ab = pman.mt1/total.mt1,
+         pleu.rel.ab = pleu.mt1/total.mt1,
+         moch.rel.ab = moch.mt1/total.mt1,
+         pman.rel.act = pman.caps.100/pman.mt1.100,
+         pleu.rel.act = pleu.caps.100/pleu.mt1.100,
+         moch.rel.act = moch.caps.100/moch.mt1.100,
+         total = pman.rel.ab+pleu.rel.ab+moch.rel.ab) %>% 
+  left_join(is.df, by = c('planting', 'month')) %>% 
+  rename(Planting = 'planting', Month = 'month')
+
+# Replace NaN with 0 (can't divide by 0)
+rodents$pman.rel.act[is.nan(rodents$pman.rel.act)]<-0
+rodents$pleu.rel.act[is.nan(rodents$pleu.rel.act)]<-0
+rodents$moch.rel.act[is.nan(rodents$moch.rel.act)]<-0
+
+pca.mat <- as.matrix(data.frame(pman = log(1+rodents$pman.mt1.100),
+                                   pleu = log(1+rodents$pleu.mt1.100),
+                                   moch = log(1+rodents$moch.mt1.100)))
+rownames(pca.mat) <- paste(rodents$Planting, rodents$Month)
+rodent.pca <- princomp(pca.mat)
+plot(rodent.pca)
+biplot(rodent.pca)
+
+rodent.pca$loadings
+```
+
+Now that all that ran, let's check the dimensions and hit a quick summary...looks reasonable!
+
+```{r, include = TRUE}
+summary(rodents)
+
+dim(rodents)
+```
+
+At this point, it's wise to do some checks to make sure that this big code chunk behaved as expected. Let's make some plots to diagnose the calculations and joins. In each case, they points should fall *below* the 1:1 line.
+
+Note: I've run this for each species, and they all seem to behave well!
+
+```{r, echo = FALSE}
+ggplot(rodents, aes(x = total.caps.100, y = total.mt1.100, color = Planting))+
+  geom_abline(intercept = 0, slope = 1)+
+  geom_point()
+
+ggplot(rodents, aes(x = total.caps, y = total.caps.100, color = Planting))+
+  geom_abline(intercept = 0, slope = 1)+
+  geom_point()
+
+# Ran this for each species, looks reasonable!
+ggplot(rodents, aes(x = moch.caps.100, y = moch.mt1.100, color = Planting))+
+  geom_abline(intercept = 0, slope = 1)+
+  geom_point()
+
+```
+
+## Step 2: Integrate seed data to rodent community data
+
+Now that we have the rodent community data ironed out, we need to join this up with the seed removal data as well as management information about the plantings, like burn history and bison presence.
+
+I've thought quite a bit about the best way to tackle this part of the analysis. After initially flirting with SEM analysis to trace the effects of management --> rodents --> seed removal, I decided that ultimately only having 8 plots was too constraining: we likely wouldn't have statistical power to detect important interactive effects (e.g., rodent diversity x seed provenance). So, I have for now ended up running a regular ol' glmer (with a binomial error structure) to look at direct effects of rodent community metrics on seed removal. I feel like we know enough about how this system works that we can add Discussion text providing context for how management in turn shapes the rodents. 
+
+```{r, include = TRUE}
+# Load in planting data, this is easy
+grid.url <- "https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/REFUGE%20grid%20data.csv"
+plantings <- read.csv(url(grid.url)) %>% 
+  # Small cosmetic detail here, capitalizing bison and burns so that figs look nicer
+  mutate(Burn.2024 = ifelse(Burn.2024 == 'burned', 'Burned', 'Unburned'),
+         Bison = ifelse(Bison == 'bison', 'Bison', 'No bison'))
+
+seed.url <- "https://raw.githubusercontent.com/pguiden-pal/2024-REFUGE-seed-removal/refs/heads/main/data/REFUGE%20seed%20removal%202.csv"
+seed.data <- read.csv(url(seed.url))
+
+invasives <- c('LOCO', 'LOMA', 'TRRE')
+
+seeds <- seed.data %>% 
+  # Keep only the depots with rodent access
+  filter(is.na(Number.of.seeds.intact) == FALSE, Treatment == 'Rodents and Inverts') %>% 
+  mutate(total.seeds = ifelse(Number.of.seeds.intact > 8, Number.of.seeds.intact, 8),
+         intact.seeds = Number.of.seeds.intact,
+         removed.seeds = total.seeds-intact.seeds,
+         prop.removed.seeds = removed.seeds/total.seeds,
+         bucket = paste(Planting, ' ',  Treatment, ' ', Month)) %>% 
+  # Add management data
+  left_join(plantings, by = "Planting") %>% 
+  mutate(rest.age = 2024-Year.restored,
+         invasive = ifelse(Species %in% invasives, 'Invasive', 'Native')) %>% 
+  # Add rodent data, using right_join() to focus on the 8 plantings where we trapped
+  right_join(rodents, by = c('Planting', 'Month'))
+  
+dim(seeds)
+summary(seeds)
+```
+
+I included the full code here for transparency, since there's a healthy amount of data organization happening here that we want to feel good about before proceeding. All that being said, it works and you can see there's a sharp reduction in the size of the dataframe (went down from 500-some rows in the original seed dataframe to 112 rows here).
+
+## Step 3: Construct and check constituent models
+
+One last quick check before diving into models--I noticed some early evidence of outliers in the rodent data, so I went ahead and screened the rodent predictor variables for normality. All of them benefit from log-transformation, which isn't super surprising, so we'll go with log-transformed variables in the model to improve model fit.
+
+```{r, echo = FALSE}
+
+# Shapiro-Wilkes test for normality
+shapiro.test(log(1+rodents$pman.caps.100)); shapiro.test(rodents$pman.caps.100)
+ggplot(rodents, aes(x = pman.caps.100))+geom_histogram()
+
+shapiro.test(log(1+rodents$pleu.caps.100)); shapiro.test(rodents$pleu.caps.100)
+ggplot(rodents, aes(x = pleu.caps.100))+geom_histogram()
+
+shapiro.test(log(1+rodents$moch.caps.100)); shapiro.test(rodents$moch.caps.100)
+ggplot(rodents, aes(x = moch.caps.100))+geom_histogram()
+
+shapiro.test(log(rodents$inv.simp)); shapiro.test(rodents$inv.simp)
+ggplot(rodents, aes(x = inv.simp))+geom_histogram()
+
+
+# Now model
+seed.mod.glmer <- glmer(data = seeds,
+                        family = binomial,
+                     cbind(removed.seeds, intact.seeds)~
+                       Month+
+                       log(inv.simp)*invasive+
+                       log(0.5+pman.caps.100)*invasive+
+                       log(0.5+moch.caps.100)*invasive+
+                       log(0.5+pleu.caps.100)*invasive+
+                       (1|Planting/bucket)+(1|ID)+(1|Species),
+                  control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
+
+check_collinearity(seed.mod.glmer)
+# Output for binomial glmer
+Anova(seed.mod.glmer)
+```
+
+For plotting purposes, we will also want an average of invasive/native seed removal at each planting/month combo:
+
+```{r}
+seed.means <- seeds %>% 
+  group_by(Planting, invasive, Month) %>% 
+  summarise(prob = mean(removed.seeds/total.seeds),
+            pman.caps.100 = mean(pman.caps.100),
+            pleu.caps.100 = mean(pleu.caps.100),
+            moch.caps.100 = mean(moch.caps.100),
+            inv.simp = mean(inv.simp))
+```
+
+
+### Pattern 1: When Peromyscus maniculatus activity is high, invasive seeds are more likely to be eaten
+
+Ok, first key pattern we see is a significant interaction between P.man activity and seed provenance. Specifically, at plots with low *P.maniculatus* activity, native and invasive seeds are consumed somewhat equally. However, where P.man are highly active, the model predicts that invasive seeds are more than 6x more likely to be removed than native seeds. The effect size is large, although the data are noisy.
+
+On that note, there's one caveat here: the model seems to be underestimating the plots with the highest seed removal (running a zero-inflated glmmTMB model didn't change this). I think one issue might be that the native seed removal pattern is almost quadratic looking, and the linear model can't capture that pattern. I can't think of an ecological reason to include a quadratic term here, so I'm chalking it up to high-variance data.
+
+```{r, echo = FALSE}
+pman.emm <- summary(emmeans(seed.mod.glmer, ~invasive*pman.caps.100, type = 'response',
+                            at = list(pman.caps.100 = seq(0, 8.6, 0.2))))
+
+emmeans(seed.mod.glmer, ~invasive*pman.caps.100, type = 'response',
+                            at = list(pman.caps.100 = c(0, 4.3, 8.6)))
+
+pman.title <- expression(atop(italic("Peromyscus maniculatus"), "captures per 100 trap-nights"))
+
+fig.2a <- ggplot(pman.emm, aes(x = 0.5+pman.caps.100, y = prob, color = invasive))+
+ geom_line()+
+  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL, fill = invasive), alpha = 0.25, color = NA)+
+  geom_point(data = seed.means)+
+  labs(x = pman.title, y = 'Proportion of seeds removed')+
+  scale_x_log10(limits = c(0.5, 12), breaks = c(1, 2, 5, 10))+
+  scale_y_continuous(limits = c(0, 1))+
+  scale_color_manual(name = '', values = c('orange', 'forestgreen'))+
+  scale_fill_manual(name = '', values = c('orange', 'forestgreen'))+
+  pal.theme+theme(legend.position = c(0.15, 0.80))
+fig.2a
+```
+
+### Pattern 2: Peromyscus leucopus activity is associated with lower overall seed removal
+
+Second pattern of note here is a strong main effect of *P. leucopus* activity on seed removal: plots without *P.leucopus* had more than 3x greater seed removal than the plot with the highest *P.leucopus* activity. Note that there is no significant interactive effect here: it's the same for both native and invasive seeds. 
+
+Statistics note: this plot really highlights why log-transforming the variables matters, given the super high leverage of the right-most point. Interesting that one of the intermediate-*P. leucopus* activity plots doesn't conform to the pattern, otherwise it would be pretty clean.
+
+```{r, echo = FALSE}
+pleu.emm <- summary(emmeans(seed.mod.glmer, ~invasive*pleu.caps.100, type = 'response',
+                            at = list(pleu.caps.100 = seq(0, 24, 0.5))))
+
+emmeans(seed.mod.glmer, ~invasive*pleu.caps.100, type = 'response',
+                            at = list(pleu.caps.100 = c(0, 12, 24)))
+
+pleu.title <- expression(atop(italic("Peromyscus leucopus"), "\n captures per 100 trap-nights"))
+
+
+fig.2b <- ggplot(pleu.emm, aes(x = 0.5+pleu.caps.100, y = prob, color = invasive))+
+  geom_line()+
+  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL, fill = invasive), alpha = 0.25, color = NA)+
+  geom_point(data = seed.means)+
+  labs(x = pleu.title, y = 'Proportion of seeds removed')+
+  scale_x_log10(limits = c(0.5, 25), breaks = c(1, 5, 10, 25))+
+  scale_y_continuous(limits = c(0, 1))+
+  scale_color_manual(name = '', values = c('orange', 'forestgreen'))+
+  scale_fill_manual(name = '', values = c('orange', 'forestgreen'))+
+  pal.theme+guides(color = 'none', fill = 'none')
+fig.2b
+```
+
+
+### Pattern 3: M.och activity is associated with lower overall seed removal
+
+This pattern is super similar to the previous one, so I won't harp on it: another case of 3x greater seed removal where *M. ochrogaster* is absent compared to where they are abundant. 
+
+```{r, echo = FALSE}
+moch.emm <- summary(emmeans(seed.mod.glmer, ~invasive*moch.caps.100, type = 'response',
+                            at = list(moch.caps.100 = seq(0, 12.5, 0.5))))
+emmeans(seed.mod.glmer, ~invasive*moch.caps.100, type = 'response',
+                            at = list(moch.caps.100 = c(0, 6, 12)))
+
+moch.title <- expression(atop(italic("Microtus ochrogaster"), "\n captures per 100 trap-nights"))
+
+fig.2c <- ggplot(moch.emm, aes(x = moch.caps.100+0.5, y = prob, color = invasive))+
+ geom_line()+
+  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL, fill = invasive), alpha = 0.25, color = NA)+
+  geom_point(data = seed.means)+
+  labs(x = moch.title, y = 'Proportion of seeds removed')+
+  scale_x_log10(limits = c(0.5, 13), breaks = c(1, 3, 6, 12))+
+  scale_y_continuous(limits = c(0, 1))+
+  scale_color_manual(name = '', values = c('orange', 'forestgreen'))+
+  scale_fill_manual(name = '', values = c('orange', 'forestgreen'))+
+  pal.theme+guides(color = 'none', fill = 'none')
+fig.2c
+```
+
+### Pattern 4: Diversity decreases seed removal, regardless of seed provenance
+
+Kind of a cool way to put it all together...The lowest diversity plots (with a single "effective species") have 8x more seed removal compared to the most diverse plots (with 4.5 effective species). Again, there is no evidence that invasive and native seeds suffer different fates here, each seems to respond equally from higher rodent biodiversity.   
+
+```{r, echo = FALSE}
+is.emm <- summary(emmeans(seed.mod.glmer, ~invasive*inv.simp, type = 'response',
+                            at = list(inv.simp = seq(1, 4.755, 0.1))))
+emmeans(seed.mod.glmer, ~invasive*inv.simp, type = 'response',
+                            at = list(inv.simp = c(1, 2.25, 4.5)))
+
+fig.2d <- ggplot(is.emm, aes(x = inv.simp, y = prob, color = invasive))+
+  geom_line()+
+  geom_ribbon(aes(ymin = asymp.LCL, ymax = asymp.UCL, fill = invasive), alpha = 0.25, color = NA)+
+  geom_point(data = seed.means)+
+  labs(x = 'Inverse Simpsons index', y = 'Proportion of seeds removed')+
+  scale_x_log10(limits = c(1, 5))+
+  scale_color_manual(values = c('orange', 'forestgreen'))+
+  scale_fill_manual(values = c('orange', 'forestgreen'))+
+  pal.theme+guides(color = 'none', fill = 'none')
+fig.2d
+```
+
+## Final figure output
+
+Ok, now to glue these key findings into a single 4-panel figure using the "patchwork" package. Outputting this in a nice large dimension, although I will touch up with powerpoint/illustrator to add letters, extra space between the columns, and center/relabel color legends. 
+
+```{r fig.height = 8, fig.width = 10, echo = FALSE}
+(fig.2a | fig.2b)/
+  (fig.2c|fig.2d)
+```
